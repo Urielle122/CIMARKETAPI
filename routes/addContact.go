@@ -1,117 +1,119 @@
-// routes/contact.go
 package routes
 
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"services/core"
 	"services/email"
 	logs "services/log"
 	"services/models"
-	"time"
 )
 
+// Ajoute cette fonction dans routes/addContact.go
+func sendContactEmail(nom, emailAddr, phone, formation, message string) error {
+	// Crée l'objet ContactModels
+	contact := models.ContactModels{
+		Nom:       nom,
+		Email:     emailAddr,
+		Phone:     phone,
+		Formation: formation,
+		Message:   message,
+	}
+
+	// Charge la configuration email
+	config := email.LoadEmailConfig()
+
+	// Récupère l'email du destinataire
+	toEmail := email.GetRecipientEmail()
+	if toEmail == "" {
+		toEmail = emailAddr // Fallback vers l'email du contact
+	}
+
+	// Appelle la fonction avec les bons arguments
+	return email.SendContactEmail(contact, toEmail, config)
+}
+
 func AddContactWithTransaction(w http.ResponseWriter, r *http.Request) {
-	type Response struct {
-		Success bool                  `json:"success"`
-		Message string                `json:"message"`
-		Data    *models.ContactModels `json:"data,omitempty"`
-	}
-
-	var body models.ContactModels
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		logs.Errorf("Erreur lors du décodage du JSON: %v", err)
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(Response{
-			Success: false,
-			Message: "Format de données invalide",
-		})
+	// ✅ Récupère la connexion DB
+	db := core.GetDB()
+	if db == nil {
+		logs.Error("Database connection is nil")
+		http.Error(w, "Database connection not available", http.StatusInternalServerError)
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	tx, err := core.MysqlDb.BeginTx(ctx, nil)
+	// Lit le corps de la requête
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		logs.Errorf("Erreur lors du démarrage de la transaction: %v", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(Response{
-			Success: false,
-			Message: "Erreur interne du serveur",
-		})
+		logs.Error("Error reading request body", "error", err)
+		http.Error(w, "Error reading request", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	// Parse les données JSON
+	var data map[string]interface{}
+	if err := json.Unmarshal(body, &data); err != nil {
+		logs.Error("Error parsing JSON", "error", err)
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
 
-	query := `INSERT INTO contact_form (nom, email, phone, formation, message) VALUES (?, ?, ?, ?, ?)`
+	// Extraction des données
+	nom, _ := data["nom"].(string)
+	emailAddr, _ := data["email"].(string)
+	phone, _ := data["phone"].(string)
+	formation, _ := data["formation"].(string)
+	message, _ := data["message"].(string)
 
-	res, err := tx.ExecContext(ctx, query, body.Nom, body.Email, body.Phone, body.Formation, body.Message)
+	// Début de la transaction
+	ctx := context.Background()
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
-		tx.Rollback()
-		logs.Errorf("Erreur lors de l'insertion: %v", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(Response{
-			Success: false,
-			Message: "Erreur lors de l'ajout du contact",
-		})
+		logs.Error("Error starting transaction", "error", err)
+		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
 
-	lastID, err := res.LastInsertId()
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Insertion dans la base
+	query := "INSERT INTO contact_form (nom, email, phone, formation, message) VALUES (?, ?, ?, ?, ?)"
+	result, err := tx.ExecContext(ctx, query, nom, emailAddr, phone, formation, message)
 	if err != nil {
-		tx.Rollback()
-		logs.Errorf("Erreur lors de la récupération de l'ID: %v", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(Response{
-			Success: false,
-			Message: "Erreur lors de l'ajout du contact",
-		})
+		logs.Error("Error inserting contact", "error", err)
+		http.Error(w, "Error saving data", http.StatusInternalServerError)
 		return
 	}
 
-	insertedContact := models.ContactModels{
-		ID:        int(lastID),
-		Nom:       body.Nom,
-		Email:     body.Email,
-		Phone:     body.Phone,
-		Formation: body.Formation,
-		Message:   body.Message,
-	}
-
+	// Commit de la transaction
 	if err := tx.Commit(); err != nil {
-		logs.Errorf("Erreur lors du commit: %v", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(Response{
-			Success: false,
-			Message: "Erreur lors de la finalisation de l'ajout",
-		})
+		logs.Error("Error committing transaction", "error", err)
+		http.Error(w, "Error saving data", http.StatusInternalServerError)
 		return
 	}
 
-	logs.Info("Transaction commitée avec succès")
+	// Récupère l'ID inséré
+	lastID, _ := result.LastInsertId()
+	logs.Info("Transaction committed successfully", "contact_id", lastID)
 
-	// ✅ CHARGER LA CONFIGURATION DEPUIS LES VARIABLES D'ENVIRONNEMENT
-	emailConfig := email.LoadEmailConfig()
-	recipientEmail := email.GetRecipientEmail()
-
-	// Vérifier que l'email du destinataire est configuré
-	if recipientEmail == "" {
-		logs.Errorf("Email du destinataire non configuré dans les variables d'environnement")
-	} else {
-		// Envoyer l'email de manière asynchrone
-		go func() {
-			if err := email.SendContactEmail(insertedContact, recipientEmail, emailConfig); err != nil {
-				logs.Errorf("Erreur lors de l'envoi de l'email: %v", err)
-			}
-		}()
+	// Envoi de l'email
+	if err := sendContactEmail(nom, emailAddr, phone, formation, message); err != nil {
+		logs.Error("Error sending email", "error", err)
+		// On ne retourne pas d'erreur car l'insertion a réussi
 	}
 
+	// Réponse de succès
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(Response{
-		Success: true,
-		Message: "Contact ajouté avec succès et email envoyé",
-		Data:    &insertedContact,
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Contact added successfully",
+		"id":      lastID,
 	})
 }
