@@ -4,6 +4,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 
 	"services/core"
 	logs "services/log"
@@ -46,6 +47,11 @@ func main() {
 
 	handlerWithCORS := enableCORS(mux)
 
-	log.Println("🚀 Serveur démarré sur le port 8080")
-	log.Fatal(http.ListenAndServe(":8080", handlerWithCORS))
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080" // Fallback pour le développement local
+	}
+
+	log.Println("🚀 Serveur démarré sur le port", port)
+	log.Fatal(http.ListenAndServe(":"+port, handlerWithCORS))
 }
