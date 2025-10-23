@@ -1,0 +1,19 @@
+# Fichiers Go
+*.exe
+/main
+/bin/
+
+# Variables d'environnement (TRÈS IMPORTANT!)
+.env
+.env.local
+
+# Certificats SSL
+/ssl/
+*.pem
+
+# Logs
+*.log
+/logs/
+
+# Fichiers système
+.DS_Store
