@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"services/logs"
+	logs "services/log"
 	"services/models"
 	"strconv"
 

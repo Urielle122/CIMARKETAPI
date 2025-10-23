@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"services/core"
 	"services/email"
-	"services/logs"
+	logs "services/log"
 	"services/models"
 	"time"
 )

@@ -6,7 +6,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
-	"services/logs"
+	logs "services/log"
 
 	"github.com/go-sql-driver/mysql" // Supprimez le _ et utilisez le package directement
 )

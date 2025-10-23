@@ -1,24 +1,22 @@
-package core 
-
+package core
 
 import (
 	"database/sql"
 	"sync"
 
 	"services/config/database"
-	"services/logs"
-
+	logs "services/log"
 )
 
 var (
-	once sync.Once
-	MysqlDb *sql.DB
+	once      sync.Once
+	MysqlDb   *sql.DB
 	ErroMysql error
 )
 
-func InitConnection(){
+func InitConnection() {
 	logs.Init()
 	once.Do(func() {
-        MysqlDb, ErroMysql = database.ConnectToMySQL()
-    })
+		MysqlDb, ErroMysql = database.ConnectToMySQL()
+	})
 }

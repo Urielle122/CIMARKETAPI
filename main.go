@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"services/core"
+	logs "services/log"
 	"services/routes"
 
 	"github.com/joho/godotenv"
@@ -22,6 +23,8 @@ func enableCORS(next http.Handler) http.Handler {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
+
+		logs.InfoF("CORS headers set for %s %s", r.Method, r.URL.Path)
 
 		next.ServeHTTP(w, r)
 	})
