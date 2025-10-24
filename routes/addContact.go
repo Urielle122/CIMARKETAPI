@@ -3,6 +3,7 @@ package routes
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"services/core"
@@ -11,9 +12,7 @@ import (
 	"services/models"
 )
 
-// Ajoute cette fonction dans routes/addContact.go
-func sendContactEmail(nom, emailAddr, phone, formation, message string) error {
-	// Crée l'objet ContactModels
+func sendEmailWithFallback(nom, emailAddr, phone, formation, message string) error {
 	contact := models.ContactModels{
 		Nom:       nom,
 		Email:     emailAddr,
@@ -22,18 +21,52 @@ func sendContactEmail(nom, emailAddr, phone, formation, message string) error {
 		Message:   message,
 	}
 
-	// Charge la configuration email
-	config := email.LoadEmailConfig()
-
-	// Récupère l'email du destinataire
-	toEmail := email.GetRecipientEmail()
-	if toEmail == "" {
-		toEmail = emailAddr // Fallback vers l'email du contact
+	// 1. Essayer Resend
+	err := email.SendResendEmail(contact)
+	if err == nil {
+		return nil // ✅ Resend a marché
 	}
 
-	// Appelle la fonction avec les bons arguments
-	return email.SendContactEmail(contact, toEmail, config)
+	logs.Warnf("Resend a échoué: %v - Essai avec Gmail...", err)
+
+	// 2. Essayer Gmail en backup
+	config := email.LoadEmailConfig()
+	toEmail := email.GetRecipientEmail()
+	if toEmail == "" {
+		toEmail = emailAddr
+	}
+
+	err = email.SendContactEmail(contact, toEmail, config)
+	if err == nil {
+		return nil // ✅ Gmail a marché
+	}
+
+	return fmt.Errorf("les deux méthodes ont échoué")
 }
+
+// Ajoute cette fonction dans routes/addContact.go
+// func sendContactEmail(nom, emailAddr, phone, formation, message string) error {
+// 	// Crée l'objet ContactModels
+// 	contact := models.ContactModels{
+// 		Nom:       nom,
+// 		Email:     emailAddr,
+// 		Phone:     phone,
+// 		Formation: formation,
+// 		Message:   message,
+// 	}
+
+// 	// Charge la configuration email
+// 	config := email.LoadEmailConfig()
+
+// 	// Récupère l'email du destinataire
+// 	toEmail := email.GetRecipientEmail()
+// 	if toEmail == "" {
+// 		toEmail = emailAddr // Fallback vers l'email du contact
+// 	}
+
+// 	// Appelle la fonction avec les bons arguments
+// 	return email.SendContactEmail(contact, toEmail, config)
+// }
 
 func AddContactWithTransaction(w http.ResponseWriter, r *http.Request) {
 	// ✅ Récupère la connexion DB
@@ -104,9 +137,8 @@ func AddContactWithTransaction(w http.ResponseWriter, r *http.Request) {
 	logs.Info("Transaction committed successfully", "contact_id", lastID)
 
 	// Envoi de l'email
-	if err := sendContactEmail(nom, emailAddr, phone, formation, message); err != nil {
-		logs.Error("Error sending email", "error", err)
-		// On ne retourne pas d'erreur car l'insertion a réussi
+	if err := sendEmailWithFallback(nom, emailAddr, phone, formation, message); err != nil {
+		logs.Warnf("Email non envoyé mais contact sauvegardé", "error", err)
 	}
 
 	// Réponse de succès

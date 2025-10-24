@@ -8,6 +8,8 @@ require go.uber.org/zap v1.27.0
 
 require github.com/joho/godotenv v1.5.1
 
+require github.com/resend/resend-go/v2 v2.27.0 // indirect
+
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
