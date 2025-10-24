@@ -15,7 +15,15 @@ import (
 
 func enableCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:4200")
+		origin := r.Header.Get("Origin")
+
+		// ✅ Autoriser les trois origines
+		if origin == "http://localhost:4200" ||
+			origin == "https://cimarket-ayln.vercel.app" ||
+			origin == "https://cimarket.vercel.app" {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+		}
+
 		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
@@ -25,7 +33,7 @@ func enableCORS(next http.Handler) http.Handler {
 			return
 		}
 
-		logs.InfoF("CORS headers set for %s %s", r.Method, r.URL.Path)
+		logs.InfoF("CORS headers set for %s %s from %s", r.Method, r.URL.Path, origin)
 
 		next.ServeHTTP(w, r)
 	})
