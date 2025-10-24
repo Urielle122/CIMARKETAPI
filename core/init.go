@@ -20,3 +20,7 @@ func InitConnection() {
 		MysqlDb, ErroMysql = database.ConnectToMySQL()
 	})
 }
+
+func GetDB() *sql.DB {
+	return MysqlDb
+}
