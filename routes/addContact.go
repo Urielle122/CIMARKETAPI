@@ -24,7 +24,7 @@ func sendEmailWithFallback(nom, emailAddr, phone, formation, message string) err
 	// 1. Essayer Resend
 	err := email.SendResendEmail(contact)
 	if err == nil {
-		return nil // ✅ Resend a marché
+		return nil 
 	}
 
 	logs.Warnf("Resend a échoué: %v - Essai avec Gmail...", err)
@@ -44,9 +44,8 @@ func sendEmailWithFallback(nom, emailAddr, phone, formation, message string) err
 	return fmt.Errorf("les deux méthodes ont échoué")
 }
 
-// Ajoute cette fonction dans routes/addContact.go
 // func sendContactEmail(nom, emailAddr, phone, formation, message string) error {
-// 	// Crée l'objet ContactModels
+// 	
 // 	contact := models.ContactModels{
 // 		Nom:       nom,
 // 		Email:     emailAddr,
@@ -58,18 +57,17 @@ func sendEmailWithFallback(nom, emailAddr, phone, formation, message string) err
 // 	// Charge la configuration email
 // 	config := email.LoadEmailConfig()
 
-// 	// Récupère l'email du destinataire
+// 	// email du destinataire
 // 	toEmail := email.GetRecipientEmail()
 // 	if toEmail == "" {
 // 		toEmail = emailAddr // Fallback vers l'email du contact
 // 	}
 
-// 	// Appelle la fonction avec les bons arguments
+// 
 // 	return email.SendContactEmail(contact, toEmail, config)
 // }
 
 func AddContactWithTransaction(w http.ResponseWriter, r *http.Request) {
-	// ✅ Récupère la connexion DB
 	db := core.GetDB()
 	if db == nil {
 		logs.Error("Database connection is nil")
@@ -132,7 +130,7 @@ func AddContactWithTransaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Récupère l'ID inséré
+	// Récuperer l'ID inséré
 	lastID, _ := result.LastInsertId()
 	logs.Info("Transaction committed successfully", "contact_id", lastID)
 
